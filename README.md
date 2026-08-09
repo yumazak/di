@@ -20,7 +20,13 @@ di . → git diff → HTTP/SSE → ブラウザ (React + @pierre/diffs CodeView)
 
 ## インストール
 
-[Releases](https://github.com/yumazak/di/releases) から自分の環境のバイナリを落とす。
+[mise](https://mise.jdx.dev/) の GitHub backend で入れる。
+
+```bash
+mise use -g github:yumazak/di
+```
+
+直接落とす場合は [Releases](https://github.com/yumazak/di/releases) から。
 
 ```bash
 # macOS (Apple Silicon)

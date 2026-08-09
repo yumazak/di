@@ -41,6 +41,7 @@ for platform in "${PLATFORMS[@]}"; do
   read -r goos goarch <<<"$platform"
   # バージョンを含めない。含めると /releases/latest/download/<名前> で
   # 最新版を直接 curl できなくなるため。
+  # `di_<os>_<arch>` の形は mise（内部の ubi）がそのまま解決できる。
   name="di_${goos}_${goarch}"
 
   echo "==> build ${goos}/${goarch}"
