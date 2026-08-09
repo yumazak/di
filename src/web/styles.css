@@ -1,3 +1,5 @@
+/* 既定値。テーマが解決されると `.app` のインラインスタイルで上書きされる
+   （src/web/theme.ts）。解決前の一瞬と、色を取り出せないテーマ用の下地。 */
 :root {
   color-scheme: light dark;
 
@@ -50,6 +52,8 @@ body {
   overflow: hidden;
   flex-direction: column;
   height: 100%;
+  background: var(--bg);
+  color: var(--fg);
 }
 
 /* ---- topbar ---- */
@@ -92,14 +96,56 @@ body {
   gap: 8px;
 }
 
+.icon-button {
+  display: inline-flex;
+  position: relative;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--fg-muted);
+  cursor: pointer;
+}
+
+.icon-button:hover:not(:disabled),
+.icon-button.is-active {
+  background: var(--accent);
+  color: var(--fg);
+}
+
+.icon-button:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
+/* 絞り込み中の印 */
+.icon-button__dot {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 6px;
+  height: 6px;
+  border: 1px solid var(--bg-raised);
+  border-radius: 50%;
+  background: var(--accent-line);
+}
+
 .segmented {
   display: flex;
   overflow: hidden;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius);
 }
 
 .segmented button {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  justify-content: center;
   padding: 3px 10px;
   border: 0;
   background: transparent;
@@ -109,31 +155,328 @@ body {
   cursor: pointer;
 }
 
+.segmented button:hover {
+  color: var(--fg);
+}
+
 .segmented button.is-active {
   background: var(--accent);
   color: var(--fg);
 }
 
+.segmented--wide {
+  width: 100%;
+  margin-bottom: 4px;
+}
+
+.segmented--wide button {
+  flex: 1;
+}
+
+.segmented--icons button {
+  padding: 3px 8px;
+}
+
 .ghost {
-  padding: 3px 10px;
+  padding: 2px 8px;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius);
   background: transparent;
   color: var(--fg-muted);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.ghost:hover {
+  color: var(--fg);
+}
+
+.primary {
+  padding: 3px 12px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: var(--add);
+  color: light-dark(#fff, #0d0d10);
   font: inherit;
   font-size: 12px;
   cursor: pointer;
 }
 
-.live {
+/* ---- popover / menu ---- */
+
+.popover {
+  position: relative;
+  display: inline-flex;
+}
+
+.popover__panel {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 6px);
+  width: 264px;
+  max-width: calc(100vw - 24px);
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-raised);
+  box-shadow:
+    0 8px 16px rgb(0 0 0 / 0.12),
+    0 2px 4px rgb(0 0 0 / 0.08);
+}
+
+.popover__panel--end {
+  right: 0;
+}
+
+.popover__panel--start {
+  left: 0;
+}
+
+.menu__row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 8px;
+  border-radius: 5px;
+  font-size: 12px;
+}
+
+.menu__row--clickable {
+  cursor: pointer;
+}
+
+.menu__row--clickable:hover {
+  background: var(--accent);
+}
+
+.menu__row.is-dimmed {
   color: var(--fg-muted);
-  font-size: 10px;
+}
+
+.menu__item {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.menu__item:hover:not(:disabled) {
+  background: var(--accent);
+}
+
+.menu__item:disabled {
+  cursor: default;
   opacity: 0.4;
 }
 
-.live.is-on {
-  color: var(--add);
-  opacity: 1;
+.menu__item.is-active {
+  background: var(--accent);
+}
+
+.menu__item--danger:hover:not(:disabled) {
+  color: var(--del);
+}
+
+.menu__value {
+  overflow: hidden;
+  flex: 1;
+  min-width: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.menu__chevron {
+  color: var(--fg-muted);
+  rotate: -90deg;
+}
+
+.menu__chevron--back {
+  rotate: 90deg;
+}
+
+.menu__list {
+  overflow-y: auto;
+  max-height: 300px;
+  margin-top: 4px;
+  overscroll-behavior: contain;
+}
+
+.menu__hint {
+  display: flex;
+  flex-direction: column;
+  margin: 0 0 4px;
+  padding: 4px 8px 6px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+}
+
+.menu__hint small {
+  color: var(--fg-muted);
+  font-size: 11px;
+}
+
+.menu__badge {
+  width: 16px;
+  border-radius: 3px;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.switch {
+  margin: 0;
+  accent-color: var(--accent-line);
+  cursor: pointer;
+}
+
+/* ---- popover / menu ---- */
+
+.popover {
+  position: relative;
+  display: inline-flex;
+}
+
+.popover__panel {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 6px);
+  width: 264px;
+  max-width: calc(100vw - 24px);
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-raised);
+  box-shadow:
+    0 8px 16px rgb(0 0 0 / 0.12),
+    0 2px 4px rgb(0 0 0 / 0.08);
+}
+
+.popover__panel--end {
+  right: 0;
+}
+
+.popover__panel--start {
+  left: 0;
+}
+
+.menu__row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 8px;
+  border-radius: 5px;
+  font-size: 12px;
+}
+
+.menu__row--clickable {
+  cursor: pointer;
+}
+
+.menu__row--clickable:hover {
+  background: var(--accent);
+}
+
+.menu__row.is-dimmed {
+  color: var(--fg-muted);
+}
+
+.menu__item {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.menu__item:hover:not(:disabled) {
+  background: var(--accent);
+}
+
+.menu__item:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
+.menu__item.is-active {
+  background: var(--accent);
+}
+
+.menu__item--danger:hover:not(:disabled) {
+  color: var(--del);
+}
+
+.menu__value {
+  overflow: hidden;
+  flex: 1;
+  min-width: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.menu__chevron {
+  color: var(--fg-muted);
+  rotate: -90deg;
+}
+
+.menu__chevron--back {
+  rotate: 90deg;
+}
+
+.menu__list {
+  overflow-y: auto;
+  max-height: 300px;
+  margin-top: 4px;
+  overscroll-behavior: contain;
+}
+
+.menu__hint {
+  display: flex;
+  flex-direction: column;
+  margin: 0 0 4px;
+  padding: 4px 8px 6px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+}
+
+.menu__hint small {
+  color: var(--fg-muted);
+  font-size: 11px;
+}
+
+.menu__badge {
+  width: 16px;
+  border-radius: 3px;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.switch {
+  margin: 0;
+  accent-color: var(--accent-line);
+  cursor: pointer;
 }
 
 /* ---- banners ---- */

@@ -3,6 +3,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App.tsx";
 import { ErrorBoundary } from "./ErrorBoundary.tsx";
+import { themeController } from "./theme.ts";
 import "./fonts.css";
 import "./styles.css";
 
@@ -22,9 +23,15 @@ const POOL_OPTIONS = {
     new Worker(new URL("@pierre/diffs/worker/worker.js", import.meta.url), { type: "module" }),
 };
 
+/**
+ * ワーカーの初期テーマ。保存済みの選択をそのまま渡しておくと、起動直後の
+ * ハイライトが既定テーマで出てから選択テーマに塗り直される、というちらつきが無くなる。
+ * 以降の変更は `useAppTheme()` が `setRenderOptions()` で流し込む。
+ */
+const initialTheme = themeController.getState();
 const HIGHLIGHTER_OPTIONS = {
-  theme: { light: "pierre-light", dark: "pierre-dark" },
-} as const;
+  theme: { light: initialTheme.lightThemeName, dark: initialTheme.darkThemeName },
+};
 
 createRoot(root).render(
   <StrictMode>

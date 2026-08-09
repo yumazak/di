@@ -1,3 +1,4 @@
+import type { TreeThemeStyles } from "@pierre/trees";
 import { FileTree, useFileTree, useFileTreeSelection } from "@pierre/trees/react";
 import { useEffect, useMemo } from "react";
 import type { FileListPayload } from "../shared/types.ts";
@@ -5,12 +6,14 @@ import type { FileListPayload } from "../shared/types.ts";
 interface Props {
   list: FileListPayload | null;
   onOpen(path: string): void;
+  /** テーマから作ったツリーの配色 */
+  style: TreeThemeStyles;
 }
 
 const TREE_STYLE = { height: "100%" } as const;
 
 /** VS Code のエクスプローラ相当。変更の有無にかかわらずリポジトリ全部を出す。 */
-export function FileBrowser({ list, onOpen }: Props) {
+export function FileBrowser({ list, onOpen, style }: Props) {
   const paths = useMemo(() => list?.paths ?? [], [list]);
 
   const { model } = useFileTree({
@@ -39,5 +42,5 @@ export function FileBrowser({ list, onOpen }: Props) {
 
   if (list === null) return <p className="pane__empty">読み込み中…</p>;
 
-  return <FileTree model={model} style={TREE_STYLE} />;
+  return <FileTree model={model} style={{ ...style, ...TREE_STYLE }} />;
 }

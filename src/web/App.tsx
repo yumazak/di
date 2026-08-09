@@ -9,7 +9,16 @@ import {
   type SelectedLineRange,
 } from "@pierre/diffs";
 import { CodeView, type CodeViewHandle } from "@pierre/diffs/react";
-import { useCallback, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
+import { IconDiffSplit, IconDiffUnified, IconRefresh } from "@pierre/icons";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+  type RefObject,
+} from "react";
 import type { DiffPayload, StageSection } from "../shared/types.ts";
 import { CommentCard, DraftCard } from "./AnnotationCard.tsx";
 import type { AnnotationMeta, Comment } from "./comments.ts";
@@ -18,14 +27,15 @@ import { FileBrowser } from "./FileBrowser.tsx";
 import { CollapseToggle, SectionBadge, ViewedToggle } from "./FileHeader.tsx";
 import { FileList } from "./FileList.tsx";
 import { fileItemId, itemId, pathOfItem, toFileEntry, type FileEntry } from "./fileStats.ts";
+import { SettingsMenu } from "./SettingsMenu.tsx";
+import { useAppTheme } from "./theme.ts";
 import { useComments } from "./useComments.ts";
 import { useDiff } from "./useDiff.ts";
 import { useFileContents, useFileList, type OpenFile } from "./useFiles.ts";
 import { useReviewState } from "./useReviewState.ts";
+import { useNarrowViewport, useSettings } from "./useSettings.ts";
 import { useStage } from "./useStage.ts";
 import { hashStrings, useContentVersions } from "./versions.ts";
-
-type Layout = "split" | "unified";
 
 /** null なら全部まとめて表示。 */
 type Selection =
@@ -34,10 +44,36 @@ type Selection =
   | null;
 
 const CODE_VIEW_STYLE = { height: "100%", overflow: "auto" } as const;
+const CODE_VIEW_LAYOUT = { paddingTop: 12, paddingBottom: 48, gap: 12 } as const;
+
+/**
+ * 貼り付いたファイルヘッダに下線を出す。スクロールで固定されている間だけ効くので、
+ * 一番上のファイルを見ているときに余計な線が出ない。
+ */
+const CODE_VIEW_CSS = `
+[data-diffs-header] {
+  container-type: scroll-state;
+  container-name: sticky-header;
+}
+
+@container sticky-header scroll-state(stuck: top) {
+  [data-diffs-header]::after {
+    position: absolute;
+    bottom: -1px;
+    left: 0;
+    width: 100%;
+    height: 1px;
+    content: '';
+    background-color: var(--border);
+  }
+}
+`;
 
 export function App() {
   const { data, error, revision, live, reload, replace } = useDiff();
-  const [layout, setLayout] = useState<Layout>("split");
+  const theme = useAppTheme();
+  const settings = useSettings();
+  const narrow = useNarrowViewport();
   const [selection, setSelection] = useState<Selection>(null);
   const viewerRef = useRef<CodeViewHandle<AnnotationMeta> | null>(null);
 
@@ -162,12 +198,24 @@ export function App() {
 
   const options = useMemo(
     () => ({
-      diffStyle: layout,
+      theme: theme.diffTheme,
+      themeType: theme.themeType,
+      // 狭い画面では 2 カラムがまともに読めないので、設定に関わらず 1 カラムにする
+      diffStyle: narrow ? "unified" : settings.diffStyle,
+      overflow: settings.wordWrap ? "wrap" : "scroll",
+      diffIndicators: settings.diffIndicators,
+      disableBackground: !settings.backgrounds,
+      disableLineNumbers: !settings.lineNumbers,
       stickyHeaders: true,
+      // 行番号の上だけハイライトする。行全体が光ると差分の色と喧嘩する
+      lineHoverHighlight: "number",
+      // ドラッグで行範囲を選べるようにする。コメントの対象範囲がその場で見える
+      enableLineSelection: true,
       // ガターの「+」。クリックで 1 行、ドラッグで範囲を選んでコメントできる。
       // 見た目はライブラリ側が出す（renderGutterUtility との併用は禁止されている）
       enableGutterUtility: true,
-      layout: { paddingTop: 12, paddingBottom: 48, gap: 12 },
+      unsafeCSS: CODE_VIEW_CSS,
+      layout: CODE_VIEW_LAYOUT,
       onGutterUtilityClick(range: SelectedLineRange, context: { item: { id: string } }) {
         openDraft({
           path: pathOfItem(context.item.id),
@@ -186,7 +234,17 @@ export function App() {
         openDraft({ path: pathOfItem(context.item.id), side, line: props.lineNumber });
       },
     }),
-    [layout, openDraft],
+    [
+      narrow,
+      theme.diffTheme,
+      theme.themeType,
+      settings.diffStyle,
+      settings.wordWrap,
+      settings.diffIndicators,
+      settings.backgrounds,
+      settings.lineNumbers,
+      openDraft,
+    ],
   );
 
   const renderHeaderPrefix = useCallback(
@@ -279,39 +337,73 @@ export function App() {
   const activeId = selection?.kind === "diff" ? itemId(selection.section, selection.path) : null;
   const openPath = selection === null ? null : selection.path;
   const isFileOnly = needsContents === true;
+  const { setAllCollapsed } = review;
+
+  // 差分と関係ないところ（ツリー・コメント）にフォーカスがあっても効いてほしいので
+  // window で拾う。入力中は邪魔になるので、フォーム部品の上では無視する
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      // target が document / window のことがあるので、要素だと確かめてから辿る
+      const target = event.target;
+      if (target instanceof HTMLElement && target.closest("input, textarea, [contenteditable]")) {
+        return;
+      }
+
+      if (event.key === "d") {
+        event.preventDefault();
+        settings.set("diffStyle", settings.diffStyle === "split" ? "unified" : "split");
+        return;
+      }
+      if (event.key === "c" && allPaths.length > 0) {
+        event.preventDefault();
+        setAllCollapsed(allPaths, !allCollapsed);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [settings, allPaths, allCollapsed, setAllCollapsed]);
 
   return (
-    <div className="app">
+    <div className="app" style={theme.chromeStyle}>
       <header className="topbar">
         <div className="topbar__title">
           <strong>{data?.repoName ?? "…"}</strong>
           {data?.branch && <span className="topbar__branch">{data.branch}</span>}
           {data?.head && <span className="topbar__sha">{data.head}</span>}
+          <span
+            className={`live${live ? " is-on" : ""}`}
+            title={live ? "自動更新中" : "切断（再取得ボタンで取り直す）"}
+            aria-label={live ? "自動更新中" : "切断"}
+          />
         </div>
 
         <div className="topbar__summary">{openPath !== null && <code>{openPath}</code>}</div>
 
         <div className="topbar__actions">
-          {!isFileOnly && (
-            <div className="segmented" role="group" aria-label="レイアウト">
-              {(["split", "unified"] as const).map((value) => (
-                <button
-                  key={value}
-                  type="button"
-                  className={layout === value ? "is-active" : ""}
-                  onClick={() => setLayout(value)}
-                >
-                  {value}
-                </button>
-              ))}
-            </div>
+          {!isFileOnly && !narrow && (
+            <button
+              type="button"
+              className="icon-button"
+              title={
+                settings.diffStyle === "split" ? "1 カラム表示にする (d)" : "2 カラム表示にする (d)"
+              }
+              aria-label="表示レイアウトを切り替える"
+              onClick={() =>
+                settings.set("diffStyle", settings.diffStyle === "split" ? "unified" : "split")
+              }
+            >
+              {settings.diffStyle === "split" ? (
+                <IconDiffSplit size={14} />
+              ) : (
+                <IconDiffUnified size={14} />
+              )}
+            </button>
           )}
-          <button type="button" className="ghost" onClick={reload}>
-            reload
+          <button type="button" className="icon-button" onClick={reload} title="差分を取り直す">
+            <IconRefresh size={14} />
           </button>
-          <span className={`live${live ? " is-on" : ""}`} title={live ? "自動更新中" : "切断"}>
-            ●
-          </span>
+          <SettingsMenu theme={theme} settings={settings} />
         </div>
       </header>
 
@@ -375,7 +467,7 @@ export function App() {
 
           <section className="pane pane--tree">
             <h2 className="pane__title">ファイル</h2>
-            <FileBrowser list={fileList} onOpen={openFromTree} />
+            <FileBrowser list={fileList} onOpen={openFromTree} style={theme.treeStyle} />
           </section>
 
           <CommentPanel
@@ -388,7 +480,6 @@ export function App() {
 
         <main className="viewer">
           <Viewer
-            layout={layout}
             items={items}
             options={options}
             renderAnnotation={renderAnnotation}
@@ -498,7 +589,6 @@ function ChangeSection(props: ChangeSectionProps) {
 }
 
 interface ViewerProps {
-  layout: Layout;
   items: CodeViewItem<AnnotationMeta>[];
   options: object;
   renderAnnotation(
@@ -517,7 +607,6 @@ interface ViewerProps {
 
 /** 表示する中身がないケースを先に片付けて、あとは CodeView に任せる。 */
 function Viewer({
-  layout,
   items,
   options,
   renderAnnotation,
@@ -558,7 +647,6 @@ function Viewer({
 
   return (
     <CodeView
-      key={layout}
       ref={viewerRef}
       items={items}
       options={options}
