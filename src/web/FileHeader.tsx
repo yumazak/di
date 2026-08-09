@@ -33,8 +33,3 @@ export function ViewedToggle({ viewed, onToggle }: ViewedProps) {
     </label>
   );
 }
-
-/** まとめ表示でどちらのセクションの差分か分かるようにする印。 */
-export function SectionBadge() {
-  return <span className="hdr-section">ステージ済み</span>;
-}

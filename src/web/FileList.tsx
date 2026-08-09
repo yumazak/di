@@ -2,7 +2,8 @@ import { CHANGE_LABEL, type FileEntry } from "./fileStats.ts";
 
 interface Props {
   files: readonly FileEntry[];
-  activeId: string | null;
+  /** ツリーから開いているファイルのパス。一致する行を光らせる */
+  activePath: string | null;
   isViewed(path: string): boolean;
   onSelect(path: string): void;
   /** ステージ操作のボタン表記（`+` = ステージ、`−` = 解除） */
@@ -16,7 +17,7 @@ interface Props {
 /** 変更ファイルの一覧。クリックでその diff までスクロールする。 */
 export function FileList({
   files,
-  activeId,
+  activePath,
   isViewed,
   onSelect,
   stageLabel,
@@ -30,7 +31,7 @@ export function FileList({
         <div key={file.id} className={`file-list__row${onDiscard ? " has-discard" : ""}`}>
           <button
             type="button"
-            className={`file-list__item${file.id === activeId ? " is-active" : ""}${
+            className={`file-list__item${file.name === activePath ? " is-active" : ""}${
               isViewed(file.name) ? " is-viewed" : ""
             }`}
             onClick={() => onSelect(file.name)}

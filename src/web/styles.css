@@ -528,6 +528,12 @@ body {
   max-height: 45%;
 }
 
+/* 本体に出しているセクションを左の帯で示す。見出しのハイライトだけだと、
+   一覧が長いときにどちらを見ているのか分からなくなる */
+.pane--changes.is-active {
+  box-shadow: inset 2px 0 0 var(--accent-line);
+}
+
 .pane--tree {
   flex: 1 1 auto;
   border-top: 1px solid var(--border);
@@ -915,9 +921,13 @@ body {
   font-size: 12px;
 }
 
+/* 見出しはセクションの切り替えボタンでもあるので、押せることと選択中かどうかが
+   分かる見た目にしておく */
 .pane__reset {
-  padding: 0;
+  margin-left: -6px;
+  padding: 1px 6px;
   border: 0;
+  border-radius: 5px;
   background: transparent;
   color: inherit;
   font: inherit;
@@ -926,11 +936,16 @@ body {
   cursor: pointer;
 }
 
+.pane__reset:hover:not(:disabled) {
+  color: var(--fg);
+}
+
 .pane__reset:disabled {
   cursor: default;
 }
 
 .pane__reset.is-active {
+  background: var(--accent);
   color: var(--fg);
 }
 
@@ -1013,16 +1028,6 @@ body {
 .file-list__stage:disabled {
   cursor: default;
   opacity: 0.4;
-}
-
-.hdr-section {
-  margin-left: 6px;
-  padding: 1px 6px;
-  border-radius: 999px;
-  background: var(--accent);
-  color: var(--fg-muted);
-  font-family: var(--sans);
-  font-size: 10px;
 }
 
 .file-list__row.has-discard {

@@ -24,7 +24,7 @@ import { CommentCard, DraftCard } from "./AnnotationCard.tsx";
 import type { AnnotationMeta, Comment } from "./comments.ts";
 import { CommentPanel } from "./CommentPanel.tsx";
 import { FileBrowser } from "./FileBrowser.tsx";
-import { CollapseToggle, SectionBadge, ViewedToggle } from "./FileHeader.tsx";
+import { CollapseToggle, ViewedToggle } from "./FileHeader.tsx";
 import { FileList } from "./FileList.tsx";
 import { fileItemId, itemId, pathOfItem, toFileEntry, type FileEntry } from "./fileStats.ts";
 import { SettingsMenu } from "./SettingsMenu.tsx";
@@ -37,11 +37,14 @@ import { useNarrowViewport, useSettings } from "./useSettings.ts";
 import { useStage } from "./useStage.ts";
 import { hashStrings, useContentVersions } from "./versions.ts";
 
-/** null なら全部まとめて表示。 */
-type Selection =
-  | { kind: "diff"; section: StageSection; path: string }
-  | { kind: "file"; path: string }
-  | null;
+/**
+ * 本体に何を出すか。
+ *
+ * ステージ済みと未ステージを同じスクロールに混ぜると、同じファイルが 2 回並んで
+ * どちらの差分を見ているのか分からなくなる。VS Code と同じく、見る対象を
+ * 「ステージ済み」「変更」「ツリーから開いたファイル」の 3 つに分ける。
+ */
+type View = { kind: "staged" } | { kind: "unstaged" } | { kind: "file"; path: string };
 
 const CODE_VIEW_STYLE = { height: "100%", overflow: "auto" } as const;
 const CODE_VIEW_LAYOUT = { paddingTop: 12, paddingBottom: 48, gap: 12 } as const;
@@ -74,7 +77,7 @@ export function App() {
   const theme = useAppTheme();
   const settings = useSettings();
   const narrow = useNarrowViewport();
-  const [selection, setSelection] = useState<Selection>(null);
+  const [view, setView] = useState<View>({ kind: "unstaged" });
   const viewerRef = useRef<CodeViewHandle<AnnotationMeta> | null>(null);
 
   const repoRoot = data?.repoRoot ?? null;
@@ -110,12 +113,20 @@ export function App() {
     [unstaged],
   );
 
-  // 変更のあるファイルは patch から中身が取れるので、取りに行くのは変更のないファイルだけ
-  const needsContents =
-    selection?.kind === "file" &&
-    !unstagedByPath.has(selection.path) &&
-    !stagedByPath.has(selection.path);
-  const openFile = useFileContents(needsContents ? selection.path : null, revision);
+  // 見ているセクションが空になったら、中身のある方へ移る。空の画面を見せないため
+  useEffect(() => {
+    setView((current) => {
+      if (current.kind === "staged" && staged.length === 0) return { kind: "unstaged" };
+      if (current.kind === "unstaged" && unstaged.length === 0 && staged.length > 0) {
+        return { kind: "staged" };
+      }
+      return current;
+    });
+  }, [staged.length, unstaged.length]);
+
+  // ツリーから開いたファイルは、変更があっても差分ではなく中身そのものを出す。
+  // 差分を見る場所は「ステージ済み」「変更」の 2 つに寄せてある
+  const openFile = useFileContents(view.kind === "file" ? view.path : null, revision);
 
   const buildDiffItem = useCallback(
     (section: StageSection, file: FileDiffMetadata): CodeViewItem<AnnotationMeta> => ({
@@ -137,24 +148,8 @@ export function App() {
   );
 
   const items = useMemo<CodeViewItem<AnnotationMeta>[]>(() => {
-    if (selection === null) {
-      return [
-        ...staged.map((f) => buildDiffItem("staged", f)),
-        ...unstaged.map((f) => buildDiffItem("unstaged", f)),
-      ];
-    }
-
-    if (selection.kind === "diff") {
-      const source = selection.section === "staged" ? stagedByPath : unstagedByPath;
-      const file = source.get(selection.path);
-      return file ? [buildDiffItem(selection.section, file)] : [];
-    }
-
-    // ツリーから開いたファイル。変更があるならその差分を優先して見せる
-    const unstagedFile = unstagedByPath.get(selection.path);
-    if (unstagedFile) return [buildDiffItem("unstaged", unstagedFile)];
-    const stagedFile = stagedByPath.get(selection.path);
-    if (stagedFile) return [buildDiffItem("staged", stagedFile)];
+    if (view.kind === "staged") return staged.map((f) => buildDiffItem("staged", f));
+    if (view.kind === "unstaged") return unstaged.map((f) => buildDiffItem("unstaged", f));
 
     const payload = openFile.payload;
     if (payload === null || payload.unavailable !== undefined) return [];
@@ -181,17 +176,7 @@ export function App() {
           ) + comments.annotationVersion(payload.path),
       },
     ];
-  }, [
-    selection,
-    staged,
-    unstaged,
-    stagedByPath,
-    unstagedByPath,
-    openFile.payload,
-    buildDiffItem,
-    comments,
-    contentVersions,
-  ]);
+  }, [view, staged, unstaged, openFile.payload, buildDiffItem, comments, contentVersions]);
 
   const { openDraft } = comments;
   const { toggleCollapsed, toggleViewed } = review;
@@ -257,13 +242,6 @@ export function App() {
     [toggleCollapsed],
   );
 
-  // まとめ表示では staged と unstaged が並ぶので、ヘッダで区別できるようにする
-  const renderHeaderFilenameSuffix = useCallback(
-    (item: CodeViewItem<AnnotationMeta>) =>
-      item.id.startsWith("staged:") ? <SectionBadge /> : null,
-    [],
-  );
-
   const renderHeaderMetadata = useCallback(
     (item: CodeViewItem<AnnotationMeta>) => {
       if (item.type !== "diff") return null;
@@ -279,33 +257,58 @@ export function App() {
   );
   const allCollapsed = allPaths.length > 0 && allPaths.every(review.isCollapsed);
 
-  /** 変更一覧から選ぶ。まとめ表示に戻したうえで、その差分までスクロールする。 */
-  function selectDiff(section: StageSection, path: string): void {
-    const id = itemId(section, path);
-    if (selection === null) {
-      viewerRef.current?.scrollTo({ type: "item", id, align: "start" });
-      return;
-    }
-    setSelection(null);
-    requestAnimationFrame(() => viewerRef.current?.scrollTo({ type: "item", id, align: "start" }));
-  }
+  /**
+   * 目的の差分が別のセクションにあるなら切り替えてからスクロールする。
+   * 表示を切り替えるとアイテムが総入れ替えになるので、描画後まで待つ必要がある。
+   */
+  const showAndScroll = useCallback(
+    (next: View, scroll: () => void) => {
+      if (view.kind === next.kind) {
+        scroll();
+        return;
+      }
+      setView(next);
+      requestAnimationFrame(scroll);
+    },
+    [view.kind],
+  );
 
-  function scrollToComment(comment: Comment): void {
-    const inUnstaged = unstagedByPath.has(comment.path);
-    const id =
-      inUnstaged || stagedByPath.has(comment.path)
-        ? itemId(inUnstaged ? "unstaged" : "staged", comment.path)
-        : fileItemId(comment.path);
-    viewerRef.current?.scrollTo({
-      type: "line",
-      id,
-      lineNumber: comment.line,
-      side: comment.side,
-      align: "center",
-    });
-  }
+  /** 変更一覧から選ぶ。そのセクションの表示に切り替えて、該当ファイルまでスクロールする。 */
+  const selectDiff = useCallback(
+    (section: StageSection, path: string) => {
+      const id = itemId(section, path);
+      showAndScroll({ kind: section }, () =>
+        viewerRef.current?.scrollTo({ type: "item", id, align: "start" }),
+      );
+    },
+    [showAndScroll],
+  );
 
-  const openFromTree = useCallback((path: string) => setSelection({ kind: "file", path }), []);
+  const scrollToComment = useCallback(
+    (comment: Comment) => {
+      // 同じパスが両方にあるときは未ステージ側を優先する（作業中の内容だから）
+      const section: StageSection | null = unstagedByPath.has(comment.path)
+        ? "unstaged"
+        : stagedByPath.has(comment.path)
+          ? "staged"
+          : null;
+      const next: View =
+        section === null ? { kind: "file", path: comment.path } : { kind: section };
+      const id = section === null ? fileItemId(comment.path) : itemId(section, comment.path);
+      showAndScroll(next, () =>
+        viewerRef.current?.scrollTo({
+          type: "line",
+          id,
+          lineNumber: comment.line,
+          side: comment.side,
+          align: "center",
+        }),
+      );
+    },
+    [stagedByPath, unstagedByPath, showAndScroll],
+  );
+
+  const openFromTree = useCallback((path: string) => setView({ kind: "file", path }), []);
 
   /** 破棄は取り消せないので必ず確認を挟む。VS Code も同じ。 */
   const confirmDiscard = useCallback(
@@ -334,9 +337,8 @@ export function App() {
     [add, remove, closeDraft],
   );
 
-  const activeId = selection?.kind === "diff" ? itemId(selection.section, selection.path) : null;
-  const openPath = selection === null ? null : selection.path;
-  const isFileOnly = needsContents === true;
+  // ツリーから開いたファイルは、変更一覧側でもその行を光らせる
+  const activePath = view.kind === "file" ? view.path : null;
   const { setAllCollapsed } = review;
 
   // 差分と関係ないところ（ツリー・コメント）にフォーカスがあっても効いてほしいので
@@ -378,10 +380,18 @@ export function App() {
           />
         </div>
 
-        <div className="topbar__summary">{openPath !== null && <code>{openPath}</code>}</div>
+        {/* いま何の差分を見ているのかを常に出す。セクションごとに画面が分かれるので、
+            サイドバーを見なくても分かるようにしておく */}
+        <div className="topbar__summary">
+          {view.kind === "file" ? (
+            <code>{view.path}</code>
+          ) : (
+            <span>{view.kind === "staged" ? "ステージ済みの差分" : "未ステージの差分"}</span>
+          )}
+        </div>
 
         <div className="topbar__actions">
-          {!isFileOnly && !narrow && (
+          {view.kind !== "file" && !narrow && (
             <button
               type="button"
               className="icon-button"
@@ -427,10 +437,10 @@ export function App() {
             <ChangeSection
               title="ステージ済み"
               entries={stagedEntries}
-              activeId={activeId}
-              isAllView={selection === null}
+              activePath={activePath}
+              isActive={view.kind === "staged"}
               isViewed={review.isViewed}
-              onReset={() => setSelection(null)}
+              onActivate={() => setView({ kind: "staged" })}
               onSelect={(path) => selectDiff("staged", path)}
               stageLabel="−"
               bulkLabel="すべて解除"
@@ -442,10 +452,10 @@ export function App() {
           <ChangeSection
             title="変更"
             entries={unstagedEntries}
-            activeId={activeId}
-            isAllView={selection === null}
+            activePath={activePath}
+            isActive={view.kind === "unstaged"}
             isViewed={review.isViewed}
-            onReset={() => setSelection(null)}
+            onActivate={() => setView({ kind: "unstaged" })}
             onSelect={(path) => selectDiff("unstaged", path)}
             stageLabel="+"
             bulkLabel="すべてステージ"
@@ -484,14 +494,11 @@ export function App() {
             options={options}
             renderAnnotation={renderAnnotation}
             renderHeaderPrefix={renderHeaderPrefix}
-            renderHeaderFilenameSuffix={renderHeaderFilenameSuffix}
             renderHeaderMetadata={renderHeaderMetadata}
             viewerRef={viewerRef}
             repoRoot={repoRoot}
-            openPath={openPath}
+            view={view}
             openFile={openFile}
-            isFileOnly={isFileOnly}
-            hasChanges={allPaths.length > 0}
           />
         </main>
       </div>
@@ -502,10 +509,11 @@ export function App() {
 interface ChangeSectionProps {
   title: string;
   entries: readonly FileEntry[];
-  activeId: string | null;
-  isAllView: boolean;
+  activePath: string | null;
+  /** このセクションを本体に出しているか */
+  isActive: boolean;
   isViewed(path: string): boolean;
-  onReset(): void;
+  onActivate(): void;
   onSelect(path: string): void;
   stageLabel: string;
   bulkLabel: string;
@@ -518,7 +526,7 @@ interface ChangeSectionProps {
 
 /** サイドバーの「ステージ済み」「変更」セクション。 */
 function ChangeSection(props: ChangeSectionProps) {
-  const { entries, isAllView } = props;
+  const { entries } = props;
   const totals = entries.reduce(
     (acc, entry) => ({
       additions: acc.additions + entry.additions,
@@ -529,12 +537,13 @@ function ChangeSection(props: ChangeSectionProps) {
   const viewed = entries.filter((entry) => props.isViewed(entry.name)).length;
 
   return (
-    <section className="pane pane--changes">
+    <section className={`pane pane--changes${props.isActive ? " is-active" : ""}`}>
       <h2 className="pane__title">
         <button
           type="button"
-          className={`pane__reset${isAllView ? " is-active" : ""}`}
-          onClick={props.onReset}
+          className={`pane__reset${props.isActive ? " is-active" : ""}`}
+          aria-pressed={props.isActive}
+          onClick={props.onActivate}
           disabled={entries.length === 0}
         >
           {props.title}
@@ -575,7 +584,7 @@ function ChangeSection(props: ChangeSectionProps) {
       ) : (
         <FileList
           files={entries}
-          activeId={props.activeId}
+          activePath={props.activePath}
           isViewed={props.isViewed}
           onSelect={props.onSelect}
           stageLabel={props.stageLabel}
@@ -595,14 +604,11 @@ interface ViewerProps {
     annotation: LineAnnotation<AnnotationMeta> | DiffLineAnnotation<AnnotationMeta>,
   ): ReactNode;
   renderHeaderPrefix(item: CodeViewItem<AnnotationMeta>): ReactNode;
-  renderHeaderFilenameSuffix(item: CodeViewItem<AnnotationMeta>): ReactNode;
   renderHeaderMetadata(item: CodeViewItem<AnnotationMeta>): ReactNode;
   viewerRef: RefObject<CodeViewHandle<AnnotationMeta> | null>;
   repoRoot: string | null;
-  openPath: string | null;
+  view: View;
   openFile: OpenFile;
-  isFileOnly: boolean;
-  hasChanges: boolean;
 }
 
 /** 表示する中身がないケースを先に片付けて、あとは CodeView に任せる。 */
@@ -611,26 +617,13 @@ function Viewer({
   options,
   renderAnnotation,
   renderHeaderPrefix,
-  renderHeaderFilenameSuffix,
   renderHeaderMetadata,
   viewerRef,
   repoRoot,
-  openPath,
+  view,
   openFile,
-  isFileOnly,
-  hasChanges,
 }: ViewerProps) {
-  if (openPath === null && !hasChanges) {
-    return (
-      <div className="empty">
-        <p>コミットしていない変更はありません</p>
-        <p className="empty__hint">左の「ファイル」から任意のファイルを開けます</p>
-        {repoRoot !== null && <code>{repoRoot}</code>}
-      </div>
-    );
-  }
-
-  if (isFileOnly) {
+  if (view.kind === "file") {
     if (openFile.loading) return <div className="empty">読み込み中…</div>;
     if (openFile.error !== null) return <div className="empty">{openFile.error}</div>;
 
@@ -639,10 +632,22 @@ function Viewer({
       return (
         <div className="empty">
           <p>{unavailable === "binary" ? "バイナリファイルです" : "ファイルが大きすぎます"}</p>
-          <code>{openPath}</code>
+          <code>{view.path}</code>
         </div>
       );
     }
+  } else if (items.length === 0) {
+    return (
+      <div className="empty">
+        <p>
+          {view.kind === "staged"
+            ? "ステージ済みの変更はありません"
+            : "未ステージの変更はありません"}
+        </p>
+        <p className="empty__hint">左の「ファイル」から任意のファイルを開けます</p>
+        {repoRoot !== null && <code>{repoRoot}</code>}
+      </div>
+    );
   }
 
   return (
@@ -652,7 +657,6 @@ function Viewer({
       options={options}
       renderAnnotation={renderAnnotation}
       renderHeaderPrefix={renderHeaderPrefix}
-      renderHeaderFilenameSuffix={renderHeaderFilenameSuffix}
       renderHeaderMetadata={renderHeaderMetadata}
       style={CODE_VIEW_STYLE}
     />
