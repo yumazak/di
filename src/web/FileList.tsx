@@ -1,3 +1,4 @@
+import { IconMinus, IconPlus, IconTrash } from "@pierre/icons";
 import { CHANGE_LABEL, type FileEntry } from "./fileStats.ts";
 
 interface Props {
@@ -6,8 +7,8 @@ interface Props {
   activePath: string | null;
   isViewed(path: string): boolean;
   onSelect(path: string): void;
-  /** ステージ操作のボタン表記（`+` = ステージ、`−` = 解除） */
-  stageLabel: string;
+  /** stage = ステージに入れる / unstage = ステージから出す */
+  stageAction: "stage" | "unstage";
   stageDisabled: boolean;
   onStage(path: string): void;
   /** 未ステージのセクションだけ渡す。渡すと破棄ボタンが出る */
@@ -20,11 +21,13 @@ export function FileList({
   activePath,
   isViewed,
   onSelect,
-  stageLabel,
+  stageAction,
   stageDisabled,
   onStage,
   onDiscard,
 }: Props) {
+  const stageLabel = stageAction === "stage" ? "ステージに入れる" : "ステージから出す";
+
   return (
     <nav className="file-list" aria-label="変更ファイル">
       {files.map((file) => (
@@ -52,24 +55,24 @@ export function FileList({
           {onDiscard && (
             <button
               type="button"
-              className="file-list__discard"
+              className="file-list__action file-list__action--danger"
               disabled={stageDisabled}
               onClick={() => onDiscard(file.name)}
               aria-label="変更を破棄"
               title="変更を破棄（取り消せません）"
             >
-              ↩
+              <IconTrash size={12} />
             </button>
           )}
           <button
             type="button"
-            className="file-list__stage"
+            className="file-list__action"
             disabled={stageDisabled}
             onClick={() => onStage(file.name)}
-            aria-label={stageLabel === "+" ? "ステージに入れる" : "ステージから出す"}
-            title={stageLabel === "+" ? "ステージに入れる" : "ステージから出す"}
+            aria-label={stageLabel}
+            title={stageLabel}
           >
-            {stageLabel}
+            {stageAction === "stage" ? <IconPlus size={12} /> : <IconMinus size={12} />}
           </button>
         </div>
       ))}

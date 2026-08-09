@@ -1,7 +1,12 @@
 import type { DiffIndicators } from "@pierre/diffs";
 import { useCallback, useEffect, useState } from "react";
+import type { ActivityView } from "./ActivityBar.tsx";
 
 export interface Settings {
+  /** アクティビティバーで選んでいるビュー */
+  sidebarView: ActivityView;
+  /** サイドバーのパネルを開いているか */
+  sidebarOpen: boolean;
   /** split = 左右 2 カラム / unified = 1 カラム */
   diffStyle: "split" | "unified";
   /** 長い行を折り返すか。false なら横スクロール */
@@ -14,6 +19,9 @@ export interface Settings {
 }
 
 export const DEFAULT_SETTINGS: Settings = {
+  // 既定はソース管理。ファイラは畳んだ状態から始める
+  sidebarView: "scm",
+  sidebarOpen: true,
   diffStyle: "split",
   wordWrap: false,
   lineNumbers: true,

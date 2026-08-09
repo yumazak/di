@@ -1,6 +1,7 @@
 import {
   parsePatchFiles,
   type CodeViewItem,
+  type CodeViewOptions,
   type DiffLineAnnotation,
   type FileDiffMetadata,
   type LineAnnotation,
@@ -9,25 +10,22 @@ import {
   type SelectedLineRange,
 } from "@pierre/diffs";
 import { CodeView, type CodeViewHandle } from "@pierre/diffs/react";
-import { IconDiffSplit, IconDiffUnified, IconRefresh } from "@pierre/icons";
 import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ReactNode,
-  type RefObject,
-} from "react";
+  IconCollapsedRow,
+  IconDiffSplit,
+  IconDiffUnified,
+  IconExpandAll,
+  IconRefresh,
+} from "@pierre/icons";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { DiffPayload, StageSection } from "../shared/types.ts";
 import { CommentCard, DraftCard } from "./AnnotationCard.tsx";
 import type { AnnotationMeta, Comment } from "./comments.ts";
-import { CommentPanel } from "./CommentPanel.tsx";
-import { FileBrowser } from "./FileBrowser.tsx";
+import { useRepoTree } from "./FileBrowser.tsx";
 import { CollapseToggle, ViewedToggle } from "./FileHeader.tsx";
-import { FileList } from "./FileList.tsx";
-import { fileItemId, itemId, pathOfItem, toFileEntry, type FileEntry } from "./fileStats.ts";
+import { fileItemId, itemId, pathOfItem, toFileEntry } from "./fileStats.ts";
 import { SettingsMenu } from "./SettingsMenu.tsx";
+import { Sidebar } from "./Sidebar.tsx";
 import { useAppTheme } from "./theme.ts";
 import { useComments } from "./useComments.ts";
 import { useDiff } from "./useDiff.ts";
@@ -88,6 +86,9 @@ export function App() {
 
   const onStaged = useCallback((payload: DiffPayload) => replace(payload), [replace]);
   const stageApi = useStage(onStaged);
+
+  const openFromTree = useCallback((path: string) => setView({ kind: "file", path }), []);
+  const tree = useRepoTree(fileList, openFromTree);
 
   // patch のハッシュを cacheKey の prefix に使うので、内容が変わらない限り
   // ハイライト結果が使い回される
@@ -181,7 +182,7 @@ export function App() {
   const { openDraft } = comments;
   const { toggleCollapsed, toggleViewed } = review;
 
-  const options = useMemo(
+  const options = useMemo<CodeViewOptions<AnnotationMeta>>(
     () => ({
       theme: theme.diffTheme,
       themeType: theme.themeType,
@@ -232,14 +233,32 @@ export function App() {
     ],
   );
 
+  /**
+   * 折りたたみ。畳んだファイルが画面の上に出ていると、その分だけ下の内容がせり上がって
+   * 目で追っていた位置を見失う。畳む前に上にあったなら、そのファイルの頭へ寄せ直す。
+   */
+  const toggleCollapsedAnchored = useCallback(
+    (id: string) => {
+      const viewer = viewerRef.current?.getInstance();
+      const itemTop = viewer?.getTopForItem(id);
+      const scrollTop = viewer?.getScrollTop();
+      toggleCollapsed(pathOfItem(id));
+      if (itemTop === undefined || scrollTop === undefined || itemTop >= scrollTop) return;
+      requestAnimationFrame(() =>
+        viewerRef.current?.scrollTo({ type: "item", id, align: "start" }),
+      );
+    },
+    [toggleCollapsed],
+  );
+
   const renderHeaderPrefix = useCallback(
     (item: CodeViewItem<AnnotationMeta>) => (
       <CollapseToggle
         collapsed={item.collapsed === true}
-        onToggle={() => toggleCollapsed(pathOfItem(item.id))}
+        onToggle={() => toggleCollapsedAnchored(item.id)}
       />
     ),
-    [toggleCollapsed],
+    [toggleCollapsedAnchored],
   );
 
   const renderHeaderMetadata = useCallback(
@@ -308,8 +327,6 @@ export function App() {
     [stagedByPath, unstagedByPath, showAndScroll],
   );
 
-  const openFromTree = useCallback((path: string) => setView({ kind: "file", path }), []);
-
   /** 破棄は取り消せないので必ず確認を挟む。VS Code も同じ。 */
   const confirmDiscard = useCallback(
     (paths: readonly string[]) => {
@@ -375,7 +392,7 @@ export function App() {
           {data?.head && <span className="topbar__sha">{data.head}</span>}
           <span
             className={`live${live ? " is-on" : ""}`}
-            title={live ? "自動更新中" : "切断（再取得ボタンで取り直す）"}
+            title={live ? "自動更新中" : "切断（reload で再取得）"}
             aria-label={live ? "自動更新中" : "切断"}
           />
         </div>
@@ -410,6 +427,19 @@ export function App() {
               )}
             </button>
           )}
+          {/* ビューアに出ている各ファイルの差分を一括で折りたたむ。
+              サイドバーのセクションの開閉とは別物なので、置き場所も分けてある */}
+          {view.kind !== "file" && allPaths.length > 0 && (
+            <button
+              type="button"
+              className="icon-button"
+              aria-pressed={allCollapsed}
+              title={allCollapsed ? "差分をすべて開く (c)" : "差分をすべてたたむ (c)"}
+              onClick={() => setAllCollapsed(allPaths, !allCollapsed)}
+            >
+              {allCollapsed ? <IconCollapsedRow size={14} /> : <IconExpandAll size={14} />}
+            </button>
+          )}
           <button type="button" className="icon-button" onClick={reload} title="差分を取り直す">
             <IconRefresh size={14} />
           </button>
@@ -432,61 +462,32 @@ export function App() {
       )}
 
       <div className="body">
-        <aside className="sidebar">
-          {stagedEntries.length > 0 && (
-            <ChangeSection
-              title="ステージ済み"
-              entries={stagedEntries}
-              activePath={activePath}
-              isActive={view.kind === "staged"}
-              isViewed={review.isViewed}
-              onActivate={() => setView({ kind: "staged" })}
-              onSelect={(path) => selectDiff("staged", path)}
-              stageLabel="−"
-              bulkLabel="すべて解除"
-              disabled={stageApi.pending}
-              onStage={(paths) => stageApi.stage(paths, false)}
-            />
-          )}
-
-          <ChangeSection
-            title="変更"
-            entries={unstagedEntries}
-            activePath={activePath}
-            isActive={view.kind === "unstaged"}
-            isViewed={review.isViewed}
-            onActivate={() => setView({ kind: "unstaged" })}
-            onSelect={(path) => selectDiff("unstaged", path)}
-            stageLabel="+"
-            bulkLabel="すべてステージ"
-            disabled={stageApi.pending}
-            onStage={(paths) => stageApi.stage(paths, true)}
-            onDiscard={confirmDiscard}
-            extra={
-              allPaths.length > 0 ? (
-                <button
-                  type="button"
-                  className="pane__action"
-                  onClick={() => review.setAllCollapsed(allPaths, !allCollapsed)}
-                >
-                  {allCollapsed ? "全部開く" : "全部たたむ"}
-                </button>
-              ) : null
-            }
-          />
-
-          <section className="pane pane--tree">
-            <h2 className="pane__title">ファイル</h2>
-            <FileBrowser list={fileList} onOpen={openFromTree} style={theme.treeStyle} />
-          </section>
-
-          <CommentPanel
-            comments={comments.comments}
-            onSelect={scrollToComment}
-            onDelete={remove}
-            onClear={comments.clear}
-          />
-        </aside>
+        <Sidebar
+          stagedEntries={stagedEntries}
+          unstagedEntries={unstagedEntries}
+          activePath={activePath}
+          activeSection={view.kind === "file" ? null : view.kind}
+          isViewed={review.isViewed}
+          view={settings.sidebarView}
+          open={settings.sidebarOpen}
+          onViewChange={(next, open) => {
+            settings.set("sidebarView", next);
+            settings.set("sidebarOpen", open);
+          }}
+          onSelectSection={(section) => setView({ kind: section })}
+          onSelect={selectDiff}
+          onStage={stageApi.stage}
+          onDiscard={confirmDiscard}
+          stagePending={stageApi.pending}
+          changedCount={allPaths.length}
+          tree={tree}
+          treeStyle={theme.treeStyle}
+          comments={comments.comments}
+          onSelectComment={scrollToComment}
+          onDeleteComment={remove}
+          onClearComments={comments.clear}
+          viewedCount={allPaths.filter(review.isViewed).length}
+        />
 
         <main className="viewer">
           <Viewer
@@ -506,106 +507,15 @@ export function App() {
   );
 }
 
-interface ChangeSectionProps {
-  title: string;
-  entries: readonly FileEntry[];
-  activePath: string | null;
-  /** このセクションを本体に出しているか */
-  isActive: boolean;
-  isViewed(path: string): boolean;
-  onActivate(): void;
-  onSelect(path: string): void;
-  stageLabel: string;
-  bulkLabel: string;
-  disabled: boolean;
-  onStage(paths: readonly string[]): void;
-  /** 未ステージのセクションだけ渡す。渡すと破棄の導線が出る */
-  onDiscard?: (paths: readonly string[]) => void;
-  extra?: ReactNode;
-}
-
-/** サイドバーの「ステージ済み」「変更」セクション。 */
-function ChangeSection(props: ChangeSectionProps) {
-  const { entries } = props;
-  const totals = entries.reduce(
-    (acc, entry) => ({
-      additions: acc.additions + entry.additions,
-      deletions: acc.deletions + entry.deletions,
-    }),
-    { additions: 0, deletions: 0 },
-  );
-  const viewed = entries.filter((entry) => props.isViewed(entry.name)).length;
-
-  return (
-    <section className={`pane pane--changes${props.isActive ? " is-active" : ""}`}>
-      <h2 className="pane__title">
-        <button
-          type="button"
-          className={`pane__reset${props.isActive ? " is-active" : ""}`}
-          aria-pressed={props.isActive}
-          onClick={props.onActivate}
-          disabled={entries.length === 0}
-        >
-          {props.title}
-        </button>
-        {entries.length > 0 && (
-          <>
-            <span className="pane__count">
-              {viewed > 0 ? `${viewed}/${entries.length}` : entries.length}
-            </span>
-            <span className="pane__stats">
-              {props.extra}
-              {props.onDiscard && (
-                <button
-                  type="button"
-                  className="pane__action pane__action--danger"
-                  disabled={props.disabled}
-                  onClick={() => props.onDiscard?.(entries.map((entry) => entry.name))}
-                >
-                  すべて破棄
-                </button>
-              )}
-              <button
-                type="button"
-                className="pane__action"
-                disabled={props.disabled}
-                onClick={() => props.onStage(entries.map((entry) => entry.name))}
-              >
-                {props.bulkLabel}
-              </button>
-              <span className="stat-add">+{totals.additions}</span>
-              <span className="stat-del">−{totals.deletions}</span>
-            </span>
-          </>
-        )}
-      </h2>
-      {entries.length === 0 ? (
-        <p className="pane__empty">変更なし</p>
-      ) : (
-        <FileList
-          files={entries}
-          activePath={props.activePath}
-          isViewed={props.isViewed}
-          onSelect={props.onSelect}
-          stageLabel={props.stageLabel}
-          stageDisabled={props.disabled}
-          onStage={(path) => props.onStage([path])}
-          onDiscard={props.onDiscard && ((path: string) => props.onDiscard?.([path]))}
-        />
-      )}
-    </section>
-  );
-}
-
 interface ViewerProps {
   items: CodeViewItem<AnnotationMeta>[];
-  options: object;
+  options: CodeViewOptions<AnnotationMeta>;
   renderAnnotation(
     annotation: LineAnnotation<AnnotationMeta> | DiffLineAnnotation<AnnotationMeta>,
   ): ReactNode;
   renderHeaderPrefix(item: CodeViewItem<AnnotationMeta>): ReactNode;
   renderHeaderMetadata(item: CodeViewItem<AnnotationMeta>): ReactNode;
-  viewerRef: RefObject<CodeViewHandle<AnnotationMeta> | null>;
+  viewerRef: React.RefObject<CodeViewHandle<AnnotationMeta> | null>;
   repoRoot: string | null;
   view: View;
   openFile: OpenFile;

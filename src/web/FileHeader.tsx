@@ -1,3 +1,5 @@
+import { IconCheck, IconChevronSm } from "@pierre/icons";
+
 interface ToggleProps {
   collapsed: boolean;
   onToggle(): void;
@@ -14,7 +16,10 @@ export function CollapseToggle({ collapsed, onToggle }: ToggleProps) {
       aria-label={collapsed ? "展開" : "折りたたむ"}
       title={collapsed ? "展開" : "折りたたむ"}
     >
-      {collapsed ? "▸" : "▾"}
+      <IconChevronSm
+        size={14}
+        className={collapsed ? "hdr-toggle__icon is-collapsed" : "hdr-toggle__icon"}
+      />
     </button>
   );
 }
@@ -27,9 +32,15 @@ interface ViewedProps {
 /** GitHub の「Viewed」相当。チェックすると畳まれる。 */
 export function ViewedToggle({ viewed, onToggle }: ViewedProps) {
   return (
-    <label className={`hdr-viewed${viewed ? " is-on" : ""}`}>
-      <input type="checkbox" checked={viewed} onChange={onToggle} />
+    <button
+      type="button"
+      className={`hdr-viewed${viewed ? " is-on" : ""}`}
+      aria-pressed={viewed}
+      onClick={onToggle}
+      title={viewed ? "表示済みを外す" : "表示済みにする"}
+    >
+      <IconCheck size={12} />
       表示済み
-    </label>
+    </button>
   );
 }

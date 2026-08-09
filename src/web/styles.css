@@ -13,7 +13,8 @@
   --del: light-dark(#cf222e, #f85149);
   --accent-line: light-dark(#8250df, #a371f7);
 
-  --sidebar-width: 300px;
+  --sidebar-width: 262px;
+  --radius: 6px;
 
   /* diffshub と同じ組み合わせを狙う。UI は Geist、コードは Berkeley Mono。
      Berkeley Mono（と後継の TX-02）は有償で同梱できないので、入っていれば使い、
@@ -56,6 +57,15 @@ body {
   color: var(--fg);
 }
 
+.sr-only {
+  position: absolute;
+  overflow: hidden;
+  clip-path: inset(50%);
+  width: 1px;
+  height: 1px;
+  white-space: nowrap;
+}
+
 /* ---- topbar ---- */
 
 .topbar {
@@ -63,7 +73,7 @@ body {
   flex: 0 0 auto;
   align-items: center;
   gap: 16px;
-  padding: 8px 12px;
+  padding: 6px 10px;
   border-bottom: 1px solid var(--border);
   background: var(--bg-raised);
 }
@@ -84,17 +94,43 @@ body {
 
 .topbar__summary {
   display: flex;
+  overflow: hidden;
   gap: 10px;
   margin-right: auto;
   color: var(--fg-muted);
   font-size: 12px;
 }
 
+.topbar__summary code {
+  overflow: hidden;
+  font-family: var(--mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .topbar__actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 2px;
 }
+
+/* SSE の接続状態。文字ではなく点にして、視線を奪わないようにする */
+.live {
+  flex: 0 0 auto;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentcolor;
+  color: var(--fg-muted);
+  opacity: 0.35;
+}
+
+.live.is-on {
+  background: var(--add);
+  opacity: 1;
+}
+
+/* ---- buttons ---- */
 
 .icon-button {
   display: inline-flex;
@@ -341,144 +377,6 @@ body {
   cursor: pointer;
 }
 
-/* ---- popover / menu ---- */
-
-.popover {
-  position: relative;
-  display: inline-flex;
-}
-
-.popover__panel {
-  position: absolute;
-  z-index: 40;
-  top: calc(100% + 6px);
-  width: 264px;
-  max-width: calc(100vw - 24px);
-  padding: 6px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--bg-raised);
-  box-shadow:
-    0 8px 16px rgb(0 0 0 / 0.12),
-    0 2px 4px rgb(0 0 0 / 0.08);
-}
-
-.popover__panel--end {
-  right: 0;
-}
-
-.popover__panel--start {
-  left: 0;
-}
-
-.menu__row {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  justify-content: space-between;
-  padding: 5px 8px;
-  border-radius: 5px;
-  font-size: 12px;
-}
-
-.menu__row--clickable {
-  cursor: pointer;
-}
-
-.menu__row--clickable:hover {
-  background: var(--accent);
-}
-
-.menu__row.is-dimmed {
-  color: var(--fg-muted);
-}
-
-.menu__item {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  width: 100%;
-  padding: 5px 8px;
-  border: 0;
-  border-radius: 5px;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  font-size: 12px;
-  text-align: left;
-  cursor: pointer;
-}
-
-.menu__item:hover:not(:disabled) {
-  background: var(--accent);
-}
-
-.menu__item:disabled {
-  cursor: default;
-  opacity: 0.4;
-}
-
-.menu__item.is-active {
-  background: var(--accent);
-}
-
-.menu__item--danger:hover:not(:disabled) {
-  color: var(--del);
-}
-
-.menu__value {
-  overflow: hidden;
-  flex: 1;
-  min-width: 0;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.menu__chevron {
-  color: var(--fg-muted);
-  rotate: -90deg;
-}
-
-.menu__chevron--back {
-  rotate: 90deg;
-}
-
-.menu__list {
-  overflow-y: auto;
-  max-height: 300px;
-  margin-top: 4px;
-  overscroll-behavior: contain;
-}
-
-.menu__hint {
-  display: flex;
-  flex-direction: column;
-  margin: 0 0 4px;
-  padding: 4px 8px 6px;
-  border-bottom: 1px solid var(--border);
-  font-size: 12px;
-}
-
-.menu__hint small {
-  color: var(--fg-muted);
-  font-size: 11px;
-}
-
-.menu__badge {
-  width: 16px;
-  border-radius: 3px;
-  font-family: var(--mono);
-  font-size: 11px;
-  font-weight: 600;
-  text-align: center;
-}
-
-.switch {
-  margin: 0;
-  accent-color: var(--accent-line);
-  cursor: pointer;
-}
-
 /* ---- banners ---- */
 
 .banner {
@@ -502,30 +400,133 @@ body {
   overflow: hidden;
   flex: 1 1 auto;
   grid-template-rows: minmax(0, 1fr);
-  grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+  /* サイドバーの列は auto。パネルを閉じるとアクティビティバーの幅まで縮む */
+  grid-template-columns: auto minmax(0, 1fr);
   min-height: 0;
 }
 
-/* サイドバーは「変更 / ファイル / コメント」の 3 段。ツリーは自前でスクロールする
-   ので、外側をスクロールさせずに各段の高さを配る。 */
+/* サイドバーは「アクティビティバー + パネル」。VS Code と同じで、選択中のアイコンを
+   もう一度押すとパネルが閉じ、レールだけが残る。 */
 .sidebar {
   display: flex;
   overflow: hidden;
-  flex-direction: column;
   border-right: 1px solid var(--border);
   background: var(--bg-raised);
 }
 
-.pane {
+.rail {
   display: flex;
+  flex: 0 0 auto;
   flex-direction: column;
+  gap: 2px;
+  padding: 6px 4px;
+  border-right: 1px solid var(--border);
+}
+
+.rail__item {
+  display: inline-flex;
+  position: relative;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--fg-muted);
+  cursor: pointer;
+}
+
+.rail__item:hover {
+  color: var(--fg);
+}
+
+.rail__item.is-active {
+  background: var(--accent);
+  color: var(--fg);
+}
+
+/* 選択中は左に帯。アイコンだけだと選択状態が読み取りにくい */
+.rail__item.is-active::before {
+  position: absolute;
+  left: -4px;
+  width: 2px;
+  height: 18px;
+  border-radius: 1px;
+  background: var(--accent-line);
+  content: "";
+}
+
+.rail__badge {
+  position: absolute;
+  top: 2px;
+  right: 0;
+  min-width: 14px;
+  padding: 0 3px;
+  border: 1px solid var(--bg-raised);
+  border-radius: 999px;
+  background: var(--accent-line);
+  color: var(--bg-raised);
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+  line-height: 14px;
+  text-align: center;
+}
+
+.panel {
+  display: flex;
+  overflow: hidden;
+  flex-direction: column;
+  width: var(--sidebar-width);
   min-height: 0;
 }
 
-.pane--changes {
-  flex: 0 1 auto;
+.panel[hidden] {
+  display: none;
+}
+
+/* パネルの中身は 1 つずつ。アンマウントすると状態が飛ぶので hidden で切り替える */
+.panel__view {
+  display: flex;
   overflow-y: auto;
-  max-height: 45%;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  overscroll-behavior: contain;
+}
+
+.panel__view[hidden] {
+  display: none;
+}
+
+/* ツリーは自前でスクロールするので、外側は伸ばすだけにする */
+.panel__view[aria-label="ファイル"] {
+  overflow: hidden;
+}
+
+.panel__head {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 4px;
+  align-items: center;
+  padding: 6px 6px 6px 12px;
+}
+
+.panel__title {
+  margin: 0 auto 0 0;
+  color: var(--fg-muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.pane {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  min-height: 0;
 }
 
 /* 本体に出しているセクションを左の帯で示す。見出しのハイライトだけだと、
@@ -534,9 +535,34 @@ body {
   box-shadow: inset 2px 0 0 var(--accent-line);
 }
 
-.pane--tree {
-  flex: 1 1 auto;
-  border-top: 1px solid var(--border);
+.pane__fold {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  margin-left: -4px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--fg-muted);
+  cursor: pointer;
+}
+
+.pane__fold:hover {
+  background: var(--accent);
+  color: var(--fg);
+}
+
+.pane__fold .is-folded {
+  rotate: -90deg;
+}
+
+/* 本体に出しているセクションを左の帯で示す。見出しのハイライトだけだと、
+   一覧が長いときにどちらを見ているのか分からなくなる */
+.pane--changes.is-active {
+  box-shadow: inset 2px 0 0 var(--accent-line);
 }
 
 .pane__title {
@@ -545,7 +571,9 @@ body {
   gap: 6px;
   align-items: center;
   margin: 0;
-  padding: 8px 12px 4px;
+  padding: 6px 6px 4px 12px;
+  flex-wrap: nowrap;
+  white-space: nowrap;
   color: var(--fg-muted);
   font-size: 11px;
   font-weight: 600;
@@ -559,10 +587,13 @@ body {
 
 .pane__stats {
   display: flex;
+  overflow: hidden;
   gap: 6px;
+  align-items: center;
   margin-left: auto;
   font-family: var(--mono);
   text-transform: none;
+  white-space: nowrap;
 }
 
 .pane__empty {
@@ -572,9 +603,62 @@ body {
   font-size: 11px;
 }
 
-.sidebar__empty {
-  padding: 12px;
+/* 見出しはセクションの切り替えボタンでもあるので、押せることと選択中かどうかが
+   分かる見た目にしておく */
+.pane__reset {
+  margin-left: -6px;
+  padding: 1px 6px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  cursor: pointer;
+}
+
+.pane__reset:hover:not(:disabled) {
+  color: var(--fg);
+}
+
+.pane__reset:disabled {
+  cursor: default;
+}
+
+.pane__reset.is-active {
+  background: var(--accent);
+  color: var(--fg);
+}
+
+/* 見出しの一括操作。文言だと 262px の幅に収まらないのでアイコンにしてある */
+.pane__action {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
   color: var(--fg-muted);
+  cursor: pointer;
+}
+
+.pane__action:hover:not(:disabled) {
+  background: var(--accent);
+  color: var(--fg);
+}
+
+.pane__action--danger:hover:not(:disabled) {
+  color: var(--del);
+}
+
+.pane__action:disabled {
+  cursor: default;
+  opacity: 0.35;
 }
 
 .viewer {
@@ -591,12 +675,20 @@ body {
   align-items: center;
   justify-content: center;
   height: 100%;
+  padding: 24px;
   color: var(--fg-muted);
+  text-align: center;
 }
 
 .empty code {
+  font-family: var(--mono);
   font-size: 12px;
   opacity: 0.7;
+}
+
+.empty__hint {
+  margin: 0;
+  font-size: 12px;
 }
 
 /* ---- file list ---- */
@@ -604,7 +696,22 @@ body {
 .file-list {
   display: flex;
   flex-direction: column;
-  padding: 6px;
+  padding: 0 6px 6px;
+}
+
+.file-list__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  border-radius: 5px;
+}
+
+.file-list__row.has-discard {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+}
+
+.file-list__row:hover {
+  background: var(--accent);
 }
 
 .file-list__item {
@@ -620,10 +727,6 @@ body {
   font: inherit;
   text-align: left;
   cursor: pointer;
-}
-
-.file-list__item:hover {
-  background: var(--accent);
 }
 
 .file-list__item.is-active {
@@ -673,6 +776,46 @@ body {
   font-size: 11px;
 }
 
+/* 行のボタンは普段は隠しておく。並んでいるだけで視線が散るため */
+.file-list__action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--fg-muted);
+  cursor: pointer;
+  opacity: 0;
+}
+
+.file-list__row:hover .file-list__action,
+.file-list__action:focus-visible {
+  opacity: 1;
+}
+
+.file-list__action:hover:not(:disabled) {
+  background: var(--bg);
+  color: var(--fg);
+}
+
+.file-list__action--danger:hover:not(:disabled) {
+  color: var(--del);
+}
+
+.file-list__action:disabled {
+  cursor: default;
+  opacity: 0;
+}
+
+.file-list__item.is-viewed .file-list__name,
+.file-list__item.is-viewed .file-list__stats {
+  opacity: 0.45;
+}
+
 .stat-add {
   color: var(--add);
 }
@@ -681,7 +824,203 @@ body {
   color: var(--del);
 }
 
+/* ---- diff stats ---- */
+
+.stats {
+  flex: 0 0 auto;
+  padding: 4px 8px 8px;
+  border-top: 1px solid var(--border);
+}
+
+.stats__toggle {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  width: 100%;
+  padding: 4px 4px;
+  border: 0;
+  background: transparent;
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.stats__toggle:hover {
+  color: var(--fg);
+}
+
+.stats__hint {
+  margin-left: auto;
+  font-size: 10px;
+  opacity: 0.6;
+}
+
+.stats__list {
+  margin: 2px 0 0;
+  padding: 0 4px 0 24px;
+}
+
+.stats__item {
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.stats__item dt {
+  color: var(--fg-muted);
+}
+
+.stats__item dd {
+  margin: 0;
+  font-family: var(--mono);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
 /* ---- comments ---- */
+
+.comments {
+  display: flex;
+  overflow: hidden;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  padding: 0 8px 8px;
+}
+
+.comments__actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 4px;
+  justify-content: flex-end;
+  padding-bottom: 6px;
+}
+
+.comments__empty {
+  margin: 0;
+  padding: 4px;
+  color: var(--fg-muted);
+  font-size: 11px;
+}
+
+.comments__fallback {
+  flex: 0 0 auto;
+  padding: 0 0 8px;
+  color: var(--fg-muted);
+  font-size: 11px;
+}
+
+.comments__fallback textarea {
+  width: 100%;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--mono);
+  font-size: 11px;
+  resize: vertical;
+}
+
+.comments__scroll {
+  overflow-y: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+  overscroll-behavior: contain;
+}
+
+.comments__group + .comments__group {
+  margin-top: 8px;
+}
+
+.comments__path {
+  overflow: hidden;
+  margin: 0 0 2px;
+  padding: 0 4px;
+  color: var(--fg-muted);
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+  text-align: left;
+}
+
+.comments__list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.comments__item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  border-radius: 5px;
+}
+
+.comments__item:hover {
+  background: var(--accent);
+}
+
+.comments__jump {
+  display: flex;
+  overflow: hidden;
+  gap: 8px;
+  align-items: baseline;
+  padding: 4px 6px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.comments__jump code {
+  flex: 0 0 auto;
+  color: var(--fg-muted);
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.comments__jump span {
+  overflow: hidden;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.comments__delete {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--fg-muted);
+  cursor: pointer;
+  opacity: 0;
+}
+
+.comments__item:hover .comments__delete,
+.comments__delete:focus-visible {
+  opacity: 1;
+}
+
+.comments__delete:hover {
+  color: var(--del);
+}
+
+/* ---- annotations ---- */
 
 /* CodeView が差し込む注釈はライト DOM のスロットなので、ここの CSS がそのまま効く */
 .annotation {
@@ -689,8 +1028,9 @@ body {
   padding: 8px 10px;
   border: 1px solid var(--border);
   border-left: 3px solid var(--accent-line);
-  border-radius: 6px;
+  border-radius: var(--radius);
   background: var(--bg-raised);
+  color: var(--fg);
   font-family: var(--sans);
   font-size: 12px;
 }
@@ -713,8 +1053,7 @@ body {
   font-size: 11px;
 }
 
-.annotation__delete,
-.comments__delete {
+.annotation__delete {
   padding: 0 4px;
   border: 0;
   background: transparent;
@@ -724,8 +1063,7 @@ body {
   cursor: pointer;
 }
 
-.annotation__delete:hover,
-.comments__delete:hover {
+.annotation__delete:hover {
   color: var(--del);
 }
 
@@ -754,122 +1092,6 @@ body {
   margin-top: 6px;
 }
 
-.primary {
-  padding: 3px 12px;
-  border: 1px solid transparent;
-  border-radius: 6px;
-  background: var(--add);
-  color: light-dark(#fff, #0d0d10);
-  font: inherit;
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.comments {
-  overflow-y: auto;
-  flex: 0 1 auto;
-  max-height: 35%;
-  padding: 8px 6px 16px;
-  border-top: 1px solid var(--border);
-}
-
-.comments__title {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-  margin: 0 0 6px;
-  padding: 0 6px;
-  color: var(--fg-muted);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.comments__count {
-  color: var(--fg);
-}
-
-.comments__actions {
-  display: flex;
-  gap: 4px;
-  margin-left: auto;
-  text-transform: none;
-}
-
-.comments__empty {
-  margin: 0;
-  padding: 0 6px;
-  color: var(--fg-muted);
-  font-size: 11px;
-}
-
-.comments__fallback {
-  padding: 0 6px 8px;
-  color: var(--fg-muted);
-  font-size: 11px;
-}
-
-.comments__fallback textarea {
-  width: 100%;
-  padding: 6px;
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  background: var(--bg);
-  color: var(--fg);
-  font-family: var(--mono);
-  font-size: 11px;
-  resize: vertical;
-}
-
-.comments__list {
-  display: flex;
-  flex-direction: column;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.comments__item {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: start;
-}
-
-.comments__jump {
-  display: flex;
-  overflow: hidden;
-  flex-direction: column;
-  gap: 2px;
-  padding: 4px 6px;
-  border: 0;
-  border-radius: 5px;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-.comments__jump:hover {
-  background: var(--accent);
-}
-
-.comments__jump code {
-  overflow: hidden;
-  color: var(--fg-muted);
-  font-size: 11px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.comments__jump span {
-  overflow: hidden;
-  font-size: 12px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .annotation__side {
   margin-right: auto;
   padding: 1px 6px;
@@ -879,12 +1101,60 @@ body {
   font-size: 10px;
 }
 
-/* ---- file browser ---- */
+/* ---- file header controls ---- */
 
-/* @pierre/trees は自前でスクロールするので、高さを渡すだけにする */
-.pane--tree > *:not(.pane__title) {
-  flex: 1 1 auto;
-  min-height: 0;
+.hdr-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  margin-left: -6px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--fg-muted);
+  cursor: pointer;
+}
+
+.hdr-toggle:hover {
+  background: var(--accent);
+  color: var(--fg);
+}
+
+.hdr-toggle__icon {
+  transition: rotate 0.12s ease;
+}
+
+.hdr-toggle__icon.is-collapsed {
+  rotate: -90deg;
+}
+
+.hdr-viewed {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  padding: 2px 6px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--fg-muted);
+  font-family: var(--sans);
+  font-size: 11px;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+}
+
+.hdr-viewed:hover {
+  border-color: var(--border);
+  color: var(--fg);
+}
+
+.hdr-viewed.is-on {
+  border-color: color-mix(in srgb, var(--add) 40%, transparent);
+  color: var(--add);
 }
 
 /* ---- crash ---- */
@@ -909,153 +1179,53 @@ body {
   margin: 0;
   padding: 10px 12px;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius);
   background: var(--bg-raised);
   color: var(--del);
   font-size: 12px;
   white-space: pre-wrap;
 }
 
-.empty__hint {
-  margin: 0;
-  font-size: 12px;
+/* ---- 狭い画面 ---- */
+
+@media (width <= 1100px) {
+  :root {
+    --sidebar-width: 228px;
+  }
 }
 
-/* 見出しはセクションの切り替えボタンでもあるので、押せることと選択中かどうかが
-   分かる見た目にしておく */
-.pane__reset {
-  margin-left: -6px;
-  padding: 1px 6px;
-  border: 0;
-  border-radius: 5px;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  letter-spacing: inherit;
-  text-transform: inherit;
-  cursor: pointer;
-}
+/* Tailscale 越しにスマホから見るケース。300px のサイドバーを横に置くと
+   差分がほとんど残らないので、上下に積む */
+@media (width <= 760px) {
+  .body {
+    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr);
+  }
 
-.pane__reset:hover:not(:disabled) {
-  color: var(--fg);
-}
+  .sidebar {
+    max-height: 45vh;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
 
-.pane__reset:disabled {
-  cursor: default;
-}
+  /* 縦積みになると幅は全部使えるので、パネルもいっぱいに広げる */
+  .panel {
+    width: auto;
+    flex: 1 1 auto;
+    min-width: 0;
+  }
 
-.pane__reset.is-active {
-  background: var(--accent);
-  color: var(--fg);
-}
+  .rail {
+    padding: 4px;
+  }
 
-/* ---- file header controls ---- */
+  .topbar {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
 
-.hdr-toggle {
-  padding: 0 4px;
-  border: 0;
-  background: transparent;
-  color: var(--fg-muted);
-  font-size: 11px;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.hdr-toggle:hover {
-  color: var(--fg);
-}
-
-.hdr-viewed {
-  display: inline-flex;
-  gap: 4px;
-  align-items: center;
-  color: var(--fg-muted);
-  font-family: var(--sans);
-  font-size: 11px;
-  white-space: nowrap;
-  cursor: pointer;
-  user-select: none;
-}
-
-.hdr-viewed.is-on {
-  color: var(--add);
-}
-
-.hdr-viewed input {
-  margin: 0;
-  cursor: pointer;
-}
-
-.file-list__item.is-viewed .file-list__name,
-.file-list__item.is-viewed .file-list__stats {
-  opacity: 0.45;
-}
-
-.pane__action {
-  padding: 0 6px;
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  background: transparent;
-  color: var(--fg-muted);
-  font: inherit;
-  font-size: 10px;
-  text-transform: none;
-  cursor: pointer;
-}
-
-.file-list__row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-}
-
-.file-list__stage {
-  padding: 0 6px;
-  border: 0;
-  border-radius: 4px;
-  background: transparent;
-  color: var(--fg-muted);
-  font-size: 13px;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.file-list__stage:hover:not(:disabled) {
-  background: var(--accent);
-  color: var(--fg);
-}
-
-.file-list__stage:disabled {
-  cursor: default;
-  opacity: 0.4;
-}
-
-.file-list__row.has-discard {
-  grid-template-columns: minmax(0, 1fr) auto auto;
-}
-
-.file-list__discard {
-  padding: 0 5px;
-  border: 0;
-  border-radius: 4px;
-  background: transparent;
-  color: var(--fg-muted);
-  font-size: 12px;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.file-list__discard:hover:not(:disabled) {
-  background: var(--accent);
-  color: var(--del);
-}
-
-.file-list__discard:disabled {
-  cursor: default;
-  opacity: 0.4;
-}
-
-.pane__action--danger:hover:not(:disabled) {
-  border-color: var(--del);
-  color: var(--del);
+  .topbar__summary {
+    order: 3;
+    width: 100%;
+  }
 }
