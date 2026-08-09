@@ -12,6 +12,20 @@
   --accent-line: light-dark(#8250df, #a371f7);
 
   --sidebar-width: 300px;
+
+  /* diffshub と同じ組み合わせを狙う。UI は Geist、コードは Berkeley Mono。
+     Berkeley Mono（と後継の TX-02）は有償で同梱できないので、入っていれば使い、
+     無ければ同梱した JetBrains Mono に落とす。日本語はどちらも glyph が無いので
+     そのまま OS のフォントへ落ちる。 */
+  --mono:
+    "Berkeley Mono", "TX-02", "JetBrains Mono Variable", "JetBrains Mono", ui-monospace,
+    SFMono-Regular, Menlo, monospace;
+  --sans: "Geist Variable", system-ui, -apple-system, "Segoe UI", "Helvetica Neue", sans-serif;
+
+  /* CodeView（shadow DOM）へも同じフォントを渡す。カスタムプロパティは
+     shadow root に継承されるので、:root で指定すれば届く */
+  --diffs-font-family: var(--mono);
+  --diffs-header-font-family: var(--sans);
 }
 
 * {
@@ -28,12 +42,7 @@ body,
 body {
   background: var(--bg);
   color: var(--fg);
-  font:
-    13px/1.5 system-ui,
-    -apple-system,
-    "Segoe UI",
-    "Helvetica Neue",
-    sans-serif;
+  font: 13px/1.5 var(--sans);
 }
 
 .app {
@@ -65,7 +74,7 @@ body {
 .topbar__branch,
 .topbar__sha {
   color: var(--fg-muted);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--mono);
   font-size: 12px;
 }
 
@@ -203,7 +212,7 @@ body {
   display: flex;
   gap: 6px;
   margin-left: auto;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--mono);
   text-transform: none;
 }
 
@@ -275,7 +284,7 @@ body {
 
 .file-list__badge {
   color: var(--fg-muted);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--mono);
   font-size: 11px;
   text-align: center;
 }
@@ -291,7 +300,7 @@ body {
 .file-list__name {
   display: flex;
   min-width: 0;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--mono);
   font-size: 12px;
 }
 
@@ -311,7 +320,7 @@ body {
 .file-list__stats {
   display: flex;
   gap: 5px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--mono);
   font-size: 11px;
 }
 
@@ -333,12 +342,7 @@ body {
   border-left: 3px solid var(--accent-line);
   border-radius: 6px;
   background: var(--bg-raised);
-  font-family:
-    system-ui,
-    -apple-system,
-    "Segoe UI",
-    "Helvetica Neue",
-    sans-serif;
+  font-family: var(--sans);
   font-size: 12px;
 }
 
@@ -356,7 +360,7 @@ body {
 
 .annotation__ref {
   color: var(--fg-muted);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--mono);
   font-size: 11px;
 }
 
@@ -464,7 +468,7 @@ body {
   border-radius: 5px;
   background: var(--bg);
   color: var(--fg);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--mono);
   font-size: 11px;
   resize: vertical;
 }
@@ -608,11 +612,7 @@ body {
   gap: 4px;
   align-items: center;
   color: var(--fg-muted);
-  font-family:
-    system-ui,
-    -apple-system,
-    "Segoe UI",
-    sans-serif;
+  font-family: var(--sans);
   font-size: 11px;
   white-space: nowrap;
   cursor: pointer;
@@ -678,11 +678,7 @@ body {
   border-radius: 999px;
   background: var(--accent);
   color: var(--fg-muted);
-  font-family:
-    system-ui,
-    -apple-system,
-    "Segoe UI",
-    sans-serif;
+  font-family: var(--sans);
   font-size: 10px;
 }
 
