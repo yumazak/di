@@ -92,7 +92,9 @@ export function useRepoTree(
     // 単一の子しか持たないフォルダは `a/b/c` と 1 行にまとめる。深い階層で
     // 中身のないフォルダ行が積み上がるのを防ぐ
     flattenEmptyDirectories: true,
-    initialExpansion: "open",
+    // 全部開いた状態だと、少し大きいリポジトリでいきなり数百行になる。
+    // VS Code のエクスプローラと同じく畳んだ状態から始める
+    initialExpansion: "closed",
     search: true,
     stickyFolders: true,
     unsafeCSS: TREE_CSS,
